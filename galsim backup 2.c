@@ -63,10 +63,16 @@ int main(int argc, char *argv[]) {
     if (!particles.x || !particles.y || !particles.mass ||
         !particles.vx || !particles.vy || !particles.brightness){
             printf("Memory allocation failed");
+            free(particles.x);
+            free(particles.y);
+            free(particles.mass);
+            free(particles.vx);
+            free(particles.vy);
+            free(particles.brightness);
             exit(1);
         }
 
-    for (int i = 0; i < N; ++i) { // (Helped by chat GPT-4o)
+    for (int i = 0; i < N; i++) { // (Helped by chat GPT-4o)
         // Read the data for particle i in the correct order (x, y, mass, vx, vy, brightness)
         fread(&particles.x[i], sizeof(double), 1, file); // Position x
         fread(&particles.y[i], sizeof(double), 1, file); // Position y
@@ -97,8 +103,7 @@ int main(int argc, char *argv[]) {
         for (int i = 0; i < N; i++){ // i is current particle
 
             // Reset force vector to {0, 0}:
-            double F_x = 0.0;
-            double F_y = 0.0;
+            double F_x = 0.0, F_y = 0.0;
 
             // i:s mass is loop invariant
             double i_mass = particles.mass[i];
@@ -112,19 +117,13 @@ int main(int argc, char *argv[]) {
                     double r_x = particles.x[i] - particles.x[j]; // r vector x component
                     double r_y = particles.y[i] - particles.y[j]; // r vector y component
 
-                    double r_dist = sqrt(r_x*r_x + r_y*r_y); // Euclidian distance
-
-                    double r_hat_x = r_x / r_dist; // x-component of normalized distance vector
-                    double r_hat_y = r_y / r_dist; // y-component of normalized distance vector
-
-                    double denominator = 1 / ((r_dist + 0.001) * (r_dist + 0.001) * (r_dist + 0.001)); // using epsilon_0 = 0.001
-
-                    double F_scalar = G * i_mass * particles.mass[j] / denominator;
+                    double F_scalar_x = -G * i_mass * particles.mass[j] * ((r_x+0.001)*(r_x+0.001));
+                    double F_scalar_y = -G * i_mass * particles.mass[j] * ((r_y+0.001)*(r_y+0.001));
 
                     // Now that the force between i and j is calculated, update the total force exerted on planet i
 
-                    F_x += F_scalar*r_hat_x;
-                    F_y += F_scalar*r_hat_y;
+                    F_x += F_scalar_x;
+                    F_y += F_scalar_y;
 
                 }
 

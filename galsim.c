@@ -117,8 +117,8 @@ int main(int argc, char *argv[]) {
                     double r_x = particles.x[i] - particles.x[j]; // r vector x component
                     double r_y = particles.y[i] - particles.y[j]; // r vector y component
 
-                    double F_scalar_x = -G * i_mass * particles.mass[j] * ((r_x+0.001)*(r_x+0.001));
-                    double F_scalar_y = -G * i_mass * particles.mass[j] * ((r_y+0.001)*(r_y+0.001));
+                    double F_scalar_x = particles.mass[j] * ((r_x+0.001)*(r_x+0.001));
+                    double F_scalar_y = particles.mass[j] * ((r_y+0.001)*(r_y+0.001));
 
                     // Now that the force between i and j is calculated, update the total force exerted on planet i
 
@@ -128,14 +128,21 @@ int main(int argc, char *argv[]) {
                 }
 
             }
+            F_x = -G * i_mass * F_x; // Doesn't need to be in loop (distributive)
+            F_y = -G * i_mass * F_y; // Doesn't need to be in loop (distributive)
 
             // Calculate acceleration for planet i using the force divided by mass
-            double ax = F_x / i_mass;
-            double ay = F_y / i_mass;
+            double i_mass_inv = 1 / i_mass;
+            double ax = F_x * i_mass_inv;
+            double ay = F_y * i_mass_inv;
 
             // Update planet i:s velocity using delta_t * acceleration
             particles.vx[i] += delta_t * ax;
             particles.vy[i] += delta_t * ay;
+
+            if (PRINT_DEBUG == 1){
+                printf("particle %d :s velocity is now %lf, %lf\n", i, particles.vx[i], particles.vy[i]);
+            }
 
         }
 
