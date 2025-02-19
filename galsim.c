@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
 
 int PRINT_DEBUG = 1;
 
@@ -45,13 +46,6 @@ int main(int argc, char *argv[]) {
 
     ParticleData particles; // Initializes a particles SoA
 
-    FILE *file = fopen(filename, "rb");
-
-    if (file == NULL){ // Checks that file got read
-        printf("Error reading file");
-        exit(1);
-    }
-
     // Allocating memory for all arrays in the SoA of size N:
     particles.x = malloc(N * sizeof(double));
     particles.y = malloc(N * sizeof(double));
@@ -71,17 +65,29 @@ int main(int argc, char *argv[]) {
             free(particles.brightness);
             exit(1);
         }
+    
+    FILE *file = fopen(filename, "rb");
 
-    for (int i = 0; i < N; i++) { // (Helped by chat GPT-4o)
-        // Read the data for particle i in the correct order (x, y, mass, vx, vy, brightness)
-        fread(&particles.x[i], sizeof(double), 1, file); // Position x
-        fread(&particles.y[i], sizeof(double), 1, file); // Position y
-        fread(&particles.mass[i], sizeof(double), 1, file); // mass
-        fread(&particles.vx[i], sizeof(double), 1, file); // x velocity
-        fread(&particles.vy[i], sizeof(double), 1, file); // y velocity
-        fread(&particles.brightness[i], sizeof(double), 1, file); // Brightness
+    if (file == NULL){ // Checks that file got read
+        printf("Error reading file");
+        exit(1);
     }
+
+    for (int i = 0; i < N; ++i) {
+        if (fread(&particles.x[i], sizeof(double), 1, file) != 1 ||
+            fread(&particles.y[i], sizeof(double), 1, file) != 1 ||
+            fread(&particles.mass[i], sizeof(double), 1, file) != 1 ||
+            fread(&particles.vx[i], sizeof(double), 1, file) != 1 ||
+            fread(&particles.vy[i], sizeof(double), 1, file) != 1 ||
+            fread(&particles.brightness[i], sizeof(double), 1, file) != 1) {
+            printf("Error reading file at particle %d\n", i);
+            fclose(file);
+            exit(1);
+        }
+    }
+
     fclose(file);
+
 
     // Beginning of the simulation, show the planets before the iteration
     if (PRINT_DEBUG == 1){
@@ -97,6 +103,9 @@ int main(int argc, char *argv[]) {
     if (PRINT_DEBUG == 1){
         printf("Time stepping starts\n");
     }
+
+    // Start time measurement
+    clock_t start = clock();
 
     for (int t = 0; t < n_steps; t++){ // Iterate through all time steps
 
@@ -128,8 +137,8 @@ int main(int argc, char *argv[]) {
                 }
 
             }
-            F_x = -G * i_mass * F_x; // Doesn't need to be in loop (distributive)
-            F_y = -G * i_mass * F_y; // Doesn't need to be in loop (distributive)
+            F_x = -G * i_mass * F_x; // G and i_mass don't need to be in loop (distributive)
+            F_y = -G * i_mass * F_y; // G and i_mass don't need to be in loop (distributive)
 
             // Calculate acceleration for planet i using the force divided by mass
             double i_mass_inv = 1 / i_mass;
@@ -156,6 +165,11 @@ int main(int argc, char *argv[]) {
     }
 
     // Time stepping done!
+    
+    // End time measurement
+    clock_t end = clock();
+    double time_spent = (double)(end - start) / CLOCKS_PER_SEC;
+    printf("Execution time: %.6f seconds\n", time_spent);
 
     if (PRINT_DEBUG == 1){
         printf("\nTime stepping done! Positions after simulation:\n");
