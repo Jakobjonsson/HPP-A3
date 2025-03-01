@@ -119,57 +119,57 @@ int main(int argc, char *argv[]) {
         for (int i = 0; i < N; i++){ // i is current particle
 
             // Reset force & acceleration vectors to {0, 0}:
-            double F_x_i = 0.0, F_y_i = 0.0;
-            double ax = 0.0, ay = 0.0;
 
             // i:s mass is loop invariant
             double i_mass = particles.mass[i];
             double r_hat_x = 0.0;
             double r_hat_y = 0.0;
+            double F_x_i, F_y_i;
+            double ax, ay;
 
-            for (int j = 0; j < N; j++){ // Iterate through all other particles to calculate total force exerted by the other particles
+            for (int j = i + 1; j < N; j++){ // Iterate through the particles that haven't been evaluated                
 
-                // Unless the current particle _is_ the other particle
+                // Doing the force calculation between particle i and j
 
-                    // Doing the force calculation between particle i and j
+                double r_x = particles.x[i] - particles.x[j]; // r vector x component
+                double r_y = particles.y[i] - particles.y[j]; // r vector y component
 
-                    double r_x = particles.x[i] - particles.x[j]; // r vector x component
-                    double r_y = particles.y[i] - particles.y[j]; // r vector y component
+                double r2 = r_x * r_x + r_y * r_y;
+                double r = sqrt(r2);
 
-                    double r2 = r_x * r_x + r_y * r_y;
-                    double r = sqrt(r2);
-
-                    double r_eps_reci = 1 / (r + 0.001);
-                    
-                    r_hat_x = r_x * r_eps_reci; // Faster to multiply with reciprocal
-                    r_hat_y = r_y * r_eps_reci;
-
-                    double denom_rec = r_eps_reci*r_eps_reci; // = 1/(r + e_0)^2
-
-                    double F_scalar = particles.mass[j] * denom_rec;
-
-
-                    // Now that the force between i and j is calculated, update the total force exerted on planet i
-
-                    F_x_i += F_scalar * r_hat_x;
-                    F_y_i += F_scalar * r_hat_y;
-
+                double r_eps_reci = 1 / (r + 0.001);
                 
+                r_hat_x = r_x * r_eps_reci; // Faster to multiply with reciprocal
+                r_hat_y = r_y * r_eps_reci;
 
+                double denom_rec = r_eps_reci*r_eps_reci; // = 1/(r + e_0)^2
+
+                double F_scalar = particles.mass[j] * denom_rec;
+                
+                // Now that we have the total force, we can calculate the x- and y components
+                F_x_i = F_scalar * r_hat_x;
+                F_y_i = F_scalar * r_hat_y;                
+
+                double F_x = -G * i_mass * F_x_i;
+                double F_y = -G * i_mass * F_y_i;
+
+                // Update acceleration for planet i using delta_t * (F/m)
+                double i_mass_inv = 1 / i_mass;
+                double j_mass_inv = 1 / particles.mass[j];
+
+                // Acceleration contribution for i-j pair
+                ax = (F_x * i_mass_inv);
+                ay = (F_y * i_mass_inv);
+
+                // Update planet i:s velocity using delta_t * acceleration
+                particles.vx[i] += delta_t * ax;
+                particles.vy[i] += delta_t * ay;
+                
+                // Planet j:s force is opposite
+                particles.vx[j] += delta_t * (-F_x * j_mass_inv);
+                particles.vy[j] += delta_t * (-F_y * j_mass_inv);
+                
             }
-            
-            double F_x = -G * i_mass * F_x_i; // G and i_mass don't need to be in loop (distributive)
-            double F_y = -G * i_mass * F_y_i; // G and i_mass don't need to be in loop (distributive)
-
-            // Update acceleration for planet i using delta_t * (F/m)
-            double i_mass_inv = 1 / i_mass;
-
-            ax = (F_x * i_mass_inv);
-            ay = (F_y * i_mass_inv);
-
-            // Update planet i:s velocity using delta_t * acceleration
-            particles.vx[i] += delta_t * ax;
-            particles.vy[i] += delta_t * ay;
 
         }
 
