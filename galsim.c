@@ -3,7 +3,7 @@
 #include <math.h>
 #include <time.h>
 
-int PRINT_DEBUG = 1;
+int PRINT_DEBUG = 1; // 0 is off, 1 is light, 2 is intricate
 
 typedef struct { // Storing the data for the particles in a Structure of Arrays (SoA)
 
@@ -23,10 +23,19 @@ typedef struct { // Storing the data for the particles in a Structure of Arrays 
 void print_particles(ParticleData particle_info, int N) {
     printf("\nParticle Data (x, y, mass, vx, vy, brightness):\n");
     for (int i = 0; i < N; ++i) {
-        printf("Particle %d: %.3f %.3f %.3f %.3f %.3f %.3f\n",
+        printf("Particle %d: %6f %6f %.6f %.6f %.6f %.6f\n",
                i, particle_info.x[i], particle_info.y[i], particle_info.mass[i],
                particle_info.vx[i], particle_info.vy[i], particle_info.brightness[i]);
     }
+}
+
+void free_particles_pointers(ParticleData *particles){ // Function for freeing all pointers in the ParticleData struct
+    free(particles->x);
+    free(particles->y);
+    free(particles->mass);
+    free(particles->vx);
+    free(particles->vy);
+    free(particles->brightness);
 }
 
 int main(int argc, char *argv[]) {
@@ -34,8 +43,7 @@ int main(int argc, char *argv[]) {
         printf("Wrong number of input variables. Should follow format:\n./galsim N filename nsteps delta_t graphics");
         exit(1);
     }
-    // Using converitng the input to variables
-    // argv[0] = ./...)
+    // Converitng the input to variables
     const int N = atoi(argv[1]);          // The number of stars/particles
     const char *filename = argv[2];       // The filename
     const int n_steps = atoi(argv[3]);    // The number of timesteps
@@ -57,12 +65,7 @@ int main(int argc, char *argv[]) {
     if (!particles.x || !particles.y || !particles.mass ||
         !particles.vx || !particles.vy || !particles.brightness){
             printf("Memory allocation failed");
-            free(particles.x);
-            free(particles.y);
-            free(particles.mass);
-            free(particles.vx);
-            free(particles.vy);
-            free(particles.brightness);
+            free_particles_pointers(&particles);
             exit(1);
         }
     
@@ -72,17 +75,21 @@ int main(int argc, char *argv[]) {
         printf("Error reading file");
         exit(1);
     }
-
+    // File reading was done with the help of Chat-GPT
     for (int i = 0; i < N; ++i) {
         if (fread(&particles.x[i], sizeof(double), 1, file) != 1 ||
             fread(&particles.y[i], sizeof(double), 1, file) != 1 ||
             fread(&particles.mass[i], sizeof(double), 1, file) != 1 ||
             fread(&particles.vx[i], sizeof(double), 1, file) != 1 ||
             fread(&particles.vy[i], sizeof(double), 1, file) != 1 ||
-            fread(&particles.brightness[i], sizeof(double), 1, file) != 1) {
+            fread(&particles.brightness[i], sizeof(double), 1, file) != 1){
             printf("Error reading file at particle %d\n", i);
             fclose(file);
+
+            // Freeing the pointers if failed
+            free_particles_pointers(&particles);
             exit(1);
+            
         }
     }
 
@@ -90,17 +97,17 @@ int main(int argc, char *argv[]) {
 
 
     // Beginning of the simulation, show the planets before the iteration
-    if (PRINT_DEBUG == 1){
+    if (PRINT_DEBUG > 0){
         print_particles(particles, N);
     }
 
-    double const G = 100/N; // Defining the instance dependent constant G
+    double const G = 100.0 / N; // Defining the instance dependent constant G
 
-    /*
-    -----TIME STEPPING-----
-    */
+    // #######################
+    // -----TIME STEPPING-----
+    // #######################
 
-    if (PRINT_DEBUG == 1){
+    if (PRINT_DEBUG > 0){
         printf("Time stepping starts\n");
     }
 
@@ -111,47 +118,58 @@ int main(int argc, char *argv[]) {
 
         for (int i = 0; i < N; i++){ // i is current particle
 
-            // Reset force vector to {0, 0}:
-            double F_x = 0.0, F_y = 0.0;
+            // Reset force & acceleration vectors to {0, 0}:
+            double F_x_i = 0.0, F_y_i = 0.0;
+            double ax = 0.0, ay = 0.0;
 
             // i:s mass is loop invariant
             double i_mass = particles.mass[i];
+            double r_hat_x = 0.0;
+            double r_hat_y = 0.0;
 
             for (int j = 0; j < N; j++){ // Iterate through all other particles to calculate total force exerted by the other particles
 
-                if (i != j){ // Unless the current particle _is_ the other particle
+                // Unless the current particle _is_ the other particle
 
                     // Doing the force calculation between particle i and j
 
                     double r_x = particles.x[i] - particles.x[j]; // r vector x component
                     double r_y = particles.y[i] - particles.y[j]; // r vector y component
 
-                    double F_scalar_x = particles.mass[j] * ((r_x+0.001)*(r_x+0.001));
-                    double F_scalar_y = particles.mass[j] * ((r_y+0.001)*(r_y+0.001));
+                    double r2 = r_x * r_x + r_y * r_y;
+                    double r = sqrt(r2);
+
+                    double r_eps_reci = 1 / (r + 0.001);
+                    
+                    r_hat_x = r_x * r_eps_reci; // Faster to multiply with reciprocal
+                    r_hat_y = r_y * r_eps_reci;
+
+                    double denom_rec = r_eps_reci*r_eps_reci; // = 1/(r + e_0)^2
+
+                    double F_scalar = particles.mass[j] * denom_rec;
+
 
                     // Now that the force between i and j is calculated, update the total force exerted on planet i
 
-                    F_x += F_scalar_x;
-                    F_y += F_scalar_y;
+                    F_x_i += F_scalar * r_hat_x;
+                    F_y_i += F_scalar * r_hat_y;
 
-                }
+                
 
             }
-            F_x = -G * i_mass * F_x; // G and i_mass don't need to be in loop (distributive)
-            F_y = -G * i_mass * F_y; // G and i_mass don't need to be in loop (distributive)
+            
+            double F_x = -G * i_mass * F_x_i; // G and i_mass don't need to be in loop (distributive)
+            double F_y = -G * i_mass * F_y_i; // G and i_mass don't need to be in loop (distributive)
 
-            // Calculate acceleration for planet i using the force divided by mass
+            // Update acceleration for planet i using delta_t * (F/m)
             double i_mass_inv = 1 / i_mass;
-            double ax = F_x * i_mass_inv;
-            double ay = F_y * i_mass_inv;
+
+            ax = (F_x * i_mass_inv);
+            ay = (F_y * i_mass_inv);
 
             // Update planet i:s velocity using delta_t * acceleration
             particles.vx[i] += delta_t * ax;
             particles.vy[i] += delta_t * ay;
-
-            if (PRINT_DEBUG == 1){
-                printf("particle %d :s velocity is now %lf, %lf\n", i, particles.vx[i], particles.vy[i]);
-            }
 
         }
 
@@ -160,7 +178,14 @@ int main(int argc, char *argv[]) {
             // Update planet i:s position using delta_t * velocity
             particles.x[i] += delta_t * particles.vx[i];
             particles.y[i] += delta_t * particles.vy[i];
+
+        
+            if (PRINT_DEBUG >= 2){
+                printf("particle %d :s velocity is now %lf, %lf\n", i, particles.vx[i], particles.vy[i]);
+            }
         }
+        
+
 
     }
 
@@ -169,37 +194,45 @@ int main(int argc, char *argv[]) {
     // End time measurement
     clock_t end = clock();
     double time_spent = (double)(end - start) / CLOCKS_PER_SEC;
-    printf("Execution time: %.6f seconds\n", time_spent);
 
-    if (PRINT_DEBUG == 1){
+    if (PRINT_DEBUG > 0){
         printf("\nTime stepping done! Positions after simulation:\n");
         print_particles(particles, N);
+        printf("Execution time: %.6f seconds\n", time_spent);
     }
 
 
     // - Writing output to file! (Helped by chat GPT-4o)
 
     FILE *output_file = fopen("result.gal", "wb");
-    for (int i = 0; i < N; ++i) {
-        // Write the data for particle i in the correct order (x, y, mass, vx, vy, brightness)
-        fwrite(&particles.x[i], sizeof(double), 1, output_file);
-        fwrite(&particles.y[i], sizeof(double), 1, output_file);
-        fwrite(&particles.mass[i], sizeof(double), 1, output_file);
-        fwrite(&particles.vx[i], sizeof(double), 1, output_file);
-        fwrite(&particles.vy[i], sizeof(double), 1, output_file);
-        fwrite(&particles.brightness[i], sizeof(double), 1, output_file);
+    
+    if (output_file == NULL){
+        printf("File opening failed");
+        fclose(file);
+        free_particles_pointers(&particles); // Freeing the pointers
+        exit(1);
     }
+
+    for (int i = 0; i < N; ++i) {
+        // Write the data for particle i in the correct order (x, y, mass, vx, vy, brightness, ax, ay)
+        if (fwrite(&particles.x[i], sizeof(double), 1, output_file) != 1 ||
+            fwrite(&particles.y[i], sizeof(double), 1, output_file) != 1 ||
+            fwrite(&particles.mass[i], sizeof(double), 1, output_file) != 1 ||
+            fwrite(&particles.vx[i], sizeof(double), 1, output_file) != 1 ||
+            fwrite(&particles.vy[i], sizeof(double), 1, output_file) != 1 ||
+            fwrite(&particles.brightness[i], sizeof(double), 1, output_file) != 1) {
+            printf("Error writing to file");
+            fclose(output_file);
+            exit(1);}
+            }
+    
 
     fclose(output_file);
 
     // Freeing the pointers
-    free(particles.x);
-    free(particles.y);
-    free(particles.mass);
-    free(particles.vx);
-    free(particles.vy);
-    free(particles.brightness);
+    free_particles_pointers(&particles);
 
     // Program success
+    
     return 0;
 }
