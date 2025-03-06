@@ -39,7 +39,7 @@ void free_particles_pointers(ParticleData *particles){ // Function for freeing a
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 6) {
+    if (argc != 7) {
         printf("Wrong number of input variables. Should follow format:\n./galsim N filename nsteps delta_t graphics");
         exit(1);
     }
@@ -49,6 +49,7 @@ int main(int argc, char *argv[]) {
     const int n_steps = atoi(argv[3]);    // The number of timesteps
     const double delta_t = atof(argv[4]); // The time step
     const int graphics = atoi(argv[5]);   // On or off, 1 or 0
+    const int n_threads = atoi(argv[6]);  // Number of threads in paralellization
 
     // Reading the file and setting the values into the SoA
 
@@ -126,8 +127,8 @@ int main(int argc, char *argv[]) {
             double r_hat_y = 0.0;
             double F_x_i, F_y_i;
             double ax, ay;
-            double i_tot_vel_x = 0.0;
-            double i_tot_vel_y = 0.0;
+	        double i_v_tot_x = 0.0;
+	        double i_v_tot_y = 0.0;
 
             for (int j = i + 1; j < N; j++){ // Iterate through the particles that haven't been evaluated                
 
@@ -164,8 +165,8 @@ int main(int argc, char *argv[]) {
                 ay = (F_y * i_mass_inv);
 
                 // Update planet i:s velocity using delta_t * acceleration
-                particles.vx[i] += delta_t * ax;
-                particles.vy[i] += delta_t * ay;
+                i_v_tot_x += delta_t * ax;
+                i_v_tot_y += delta_t * ay;
                 
                 // Planet j:s force is opposite
                 particles.vx[j] += delta_t * (-F_x * j_mass_inv);
@@ -173,9 +174,8 @@ int main(int argc, char *argv[]) {
                 
             }
 
-            // Update planet i:s total velocity
-            particles.vx[i] += delta_t*i_tot_vel_x;
-            particles.vy[i] += delta_t*i_tot_vel_y;
+	    particles.vx[i] += i_v_tot_x;
+	    particles.vy[i] += i_v_tot_y;
 
         }
 

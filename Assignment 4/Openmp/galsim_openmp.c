@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
+#include <omp.h>
 
 int PRINT_DEBUG = 1; // 0 is off, 1 is light, 2 is intricate
 
@@ -39,7 +40,7 @@ void free_particles_pointers(ParticleData *particles){ // Function for freeing a
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 6) {
+    if (argc != 7) {
         printf("Wrong number of input variables. Should follow format:\n./galsim N filename nsteps delta_t graphics");
         exit(1);
     }
@@ -49,6 +50,25 @@ int main(int argc, char *argv[]) {
     const int n_steps = atoi(argv[3]);    // The number of timesteps
     const double delta_t = atof(argv[4]); // The time step
     const int graphics = atoi(argv[5]);   // On or off, 1 or 0
+    int n_threads = atoi(argv[6]);  // Number of threads in paralellization
+
+    if (n_threads < 1){ // Checks for legal input for number of threads
+        printf("Illegal number of threads, expected > 0");
+        exit(1);
+    }
+
+    omp_set_num_threads(n_threads); // Setting the number of threads that the user inputted
+
+    #pragma omp parallel num_threads(n_threads) // Checking that the parallelization works
+    {
+        int num_threads = omp_get_num_threads();
+        printf("Thread %d out of %d\n", omp_get_thread_num(), num_threads);
+        if (num_threads != n_threads){
+            printf("Error in parallelization. Doesn't create the correct number of threads.\nWanted: %d   Created: %d", n_threads, num_threads);
+            exit(1);
+        
+        }
+    }
 
     // Reading the file and setting the values into the SoA
 
@@ -111,11 +131,14 @@ int main(int argc, char *argv[]) {
         printf("Time stepping starts\n");
     }
 
+    int chunk_size = N/n_threads;
+
     // Start time measurement
-    clock_t start = clock();
+    double t_start = omp_get_wtime();
 
     for (int t = 0; t < n_steps; t++){ // Iterate through all time steps
 
+        #pragma omp parallel for schedule(dynamic, 1) // Parallelizing the i loop with dynamic scheduling to combat load balancing problem
         for (int i = 0; i < N; i++){ // i is current particle
 
             // Reset force & acceleration vectors to {0, 0}:
@@ -126,8 +149,10 @@ int main(int argc, char *argv[]) {
             double r_hat_y = 0.0;
             double F_x_i, F_y_i;
             double ax, ay;
-
-            for (int j = i + 1; j < N; j++){ // Iterate through the particles that haven't been evaluated                
+	        double i_v_tot_x = 0.0;
+	        double i_v_tot_y = 0.0;
+            
+            for (int j = i + 1; j < N; j++){ // Iterate through the particles that haven't been evaluated          
 
                 // Doing the force calculation between particle i and j
 
@@ -162,27 +187,27 @@ int main(int argc, char *argv[]) {
                 ay = (F_y * i_mass_inv);
 
                 // Update planet i:s velocity using delta_t * acceleration
-                particles.vx[i] += delta_t * ax;
-                particles.vy[i] += delta_t * ay;
+                i_v_tot_x += delta_t * ax;
+                i_v_tot_y += delta_t * ay;
                 
                 // Planet j:s force is opposite
-                particles.vx[j] += delta_t * (-F_x * j_mass_inv);
+                
+                particles.vx[j] += delta_t * (-F_x * j_mass_inv);                
                 particles.vy[j] += delta_t * (-F_y * j_mass_inv);
                 
             }
 
+	    particles.vx[i] += i_v_tot_x;
+	    particles.vy[i] += i_v_tot_y;
+
         }
 
+        #pragma omp parallel for schedule(static, 1) // Parallelizes the for loop with static scheduling (even load)
         for (int i = 0; i < N; i++){
 
             // Update planet i:s position using delta_t * velocity
             particles.x[i] += delta_t * particles.vx[i];
             particles.y[i] += delta_t * particles.vy[i];
-
-        
-            if (PRINT_DEBUG >= 2){
-                printf("particle %d :s velocity is now %lf, %lf\n", i, particles.vx[i], particles.vy[i]);
-            }
         }
         
 
@@ -192,8 +217,8 @@ int main(int argc, char *argv[]) {
     // Time stepping done!
     
     // End time measurement
-    clock_t end = clock();
-    double time_spent = (double)(end - start) / CLOCKS_PER_SEC;
+    double t_end = omp_get_wtime();
+    double time_spent = t_end - t_start;
 
     if (PRINT_DEBUG > 0){
         printf("\nTime stepping done! Positions after simulation:\n");
