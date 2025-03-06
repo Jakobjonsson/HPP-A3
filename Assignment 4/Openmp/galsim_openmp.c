@@ -151,10 +151,10 @@ int main(int argc, char *argv[]) {
             double r_hat_y = 0.0;
             double F_x_i, F_y_i;
             double ax, ay;
-	        double i_v_tot_x = 0.0;
-	        double i_v_tot_y = 0.0;
+	        double i_a_tot_x = 0.0;
+	        double i_a_tot_y = 0.0;
             
-            #pragma omp parallel for schedule(dynamic, chunk_size) reduction(+:i_v_tot_x, i_v_tot_y)// Parallelizing the j-loop with dynamic scheduling to combat load balancing problem
+            #pragma omp parallel for schedule(dynamic, chunk_size) reduction(+:i_a_tot_x, i_a_tot_y)// Parallelizing the j-loop with dynamic scheduling to combat load balancing problem
             for (int j = i + 1; j < N; j++){ // Iterate through the particles that haven't been evaluated          
 
                 // Doing the force calculation between particle i and j
@@ -199,13 +199,13 @@ int main(int argc, char *argv[]) {
 
                 // Update planet i:s velocity using delta_t * acceleration
 
-                i_v_tot_x += ax;
-                i_v_tot_y += ay;
+                i_a_tot_x += ax;
+                i_a_tot_y += ay;
                 
             }
 
-	    particles.vx[i] += delta_t*i_v_tot_x;
-	    particles.vy[i] += delta_t*i_v_tot_y;
+	    particles.vx[i] += delta_t*i_a_tot_x;
+	    particles.vy[i] += delta_t*i_a_tot_y;
 
         }
 
