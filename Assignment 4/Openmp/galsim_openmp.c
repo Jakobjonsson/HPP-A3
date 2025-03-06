@@ -4,6 +4,8 @@
 #include <time.h>
 #include <omp.h>
 
+// Klarade compare_gal_files, fungerar
+
 int PRINT_DEBUG = 1; // 0 is off, 1 is light, 2 is intricate
 
 typedef struct { // Storing the data for the particles in a Structure of Arrays (SoA)
