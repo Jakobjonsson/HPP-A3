@@ -164,8 +164,8 @@ int main(int argc, char *argv[]) {
                 ay = (F_y * i_mass_inv);
 
                 // Update planet i:s velocity using delta_t * acceleration
-                particles.vx[i] += delta_t * ax;
-                particles.vy[i] += delta_t * ay;
+                i_tot_vel_x += delta_t * ax;
+                i_tot_vel_y += delta_t * ay;
                 
                 // Planet j:s force is opposite
                 particles.vx[j] += delta_t * (-F_x * j_mass_inv);

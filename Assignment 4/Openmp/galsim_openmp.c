@@ -138,8 +138,8 @@ int main(int argc, char *argv[]) {
 
     for (int t = 0; t < n_steps; t++){ // Iterate through all time steps
 
-        #pragma omp parallel for schedule(dynamic, 1) // Parallelizing the i loop with dynamic scheduling to combat load balancing problem
         for (int i = 0; i < N; i++){ // i is current particle
+
 
             // Reset force & acceleration vectors to {0, 0}:
 
@@ -152,6 +152,7 @@ int main(int argc, char *argv[]) {
 	        double i_v_tot_x = 0.0;
 	        double i_v_tot_y = 0.0;
             
+            #pragma omp parallel for schedule(dynamic, chunk_size) reduction(+:i_v_tot_x, i_v_tot_y)// Parallelizing the j-loop with dynamic scheduling to combat load balancing problem
             for (int j = i + 1; j < N; j++){ // Iterate through the particles that haven't been evaluated          
 
                 // Doing the force calculation between particle i and j
@@ -183,26 +184,30 @@ int main(int argc, char *argv[]) {
                 double j_mass_inv = 1 / particles.mass[j];
 
                 // Acceleration contribution for i-j pair
+
                 ax = (F_x * i_mass_inv);
                 ay = (F_y * i_mass_inv);
 
-                // Update planet i:s velocity using delta_t * acceleration
-                i_v_tot_x += delta_t * ax;
-                i_v_tot_y += delta_t * ay;
-                
                 // Planet j:s force is opposite
                 
+                
                 particles.vx[j] += delta_t * (-F_x * j_mass_inv);                
+                               
                 particles.vy[j] += delta_t * (-F_y * j_mass_inv);
+
+                // Update planet i:s velocity using delta_t * acceleration
+
+                i_v_tot_x += ax;
+                i_v_tot_y += ay;
                 
             }
 
-	    particles.vx[i] += i_v_tot_x;
-	    particles.vy[i] += i_v_tot_y;
+	    particles.vx[i] += delta_t*i_v_tot_x;
+	    particles.vy[i] += delta_t*i_v_tot_y;
 
         }
 
-        #pragma omp parallel for schedule(static, 1) // Parallelizes the for loop with static scheduling (even load)
+        #pragma omp parallel for schedule(static, chunk_size) // Parallelizes the for loop with static scheduling (even load)
         for (int i = 0; i < N; i++){
 
             // Update planet i:s position using delta_t * velocity
